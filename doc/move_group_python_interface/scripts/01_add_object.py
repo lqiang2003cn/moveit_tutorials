@@ -1,10 +1,15 @@
+import sys
+
+import actionlib
 import geometry_msgs.msg
 import moveit_commander
-import sys
-import rospy
 import moveit_msgs.msg
-from tf.transformations import quaternion_from_euler
+import rospy
+from move_base_msgs.msg import MoveBaseAction
+from move_base_msgs.msg import MoveBaseGoal
 from moveit_commander.conversions import pose_to_list
+from std_srvs.srv import Empty
+from tf.transformations import quaternion_from_euler
 
 
 def all_close(goal, actual, tolerance):
@@ -15,7 +20,6 @@ def all_close(goal, actual, tolerance):
     @param: tolerance  A float
     @returns: bool
     """
-    all_equal = True
     if type(goal) is list:
         for index in range(len(goal)):
             if abs(actual[index] - goal[index]) > tolerance:
@@ -41,6 +45,9 @@ class MoveGroupPythonInterfaceTutorial(object):
         scene = moveit_commander.PlanningSceneInterface()
         group_name = "arm_left_torso"
         move_group = moveit_commander.MoveGroupCommander(group_name)
+
+        gripper_group = moveit_commander.MoveGroupCommander("gripper_left")
+
         display_trajectory_publisher = rospy.Publisher('/move_group/display_planned_path',
                                                        moveit_msgs.msg.DisplayTrajectory,
                                                        queue_size=20)
@@ -66,6 +73,7 @@ class MoveGroupPythonInterfaceTutorial(object):
         self.robot = robot
         self.scene = scene
         self.move_group = move_group
+        self.gripper_group = gripper_group
         self.display_trajectory_publisher = display_trajectory_publisher
         self.planning_frame = planning_frame
         self.eef_link = eef_link
@@ -114,7 +122,7 @@ class MoveGroupPythonInterfaceTutorial(object):
         box_pose.pose.orientation.w = q[3]
 
         box_name = "table"
-        scene.add_box(box_name, box_pose, size=(1, 0.8, 0.83))
+        scene.add_box(box_name, box_pose, size=(1 + 0.1, 0.8 + 0.05, 0.83))
 
         # Copy local variables back to class variables. In practice, you should use the class
         # variables directly unless you have a good reason not to.
@@ -150,17 +158,17 @@ class MoveGroupPythonInterfaceTutorial(object):
         # If we exited the while loop without returning then we timed out
         return False
 
-    def go_to_pose_goal(self):
+    def go_to_prepick_pos(self):
         box_x = 4
-        box_y = -2.7
-        box_z = 0.8393
+        box_y = -2.7 + 0.035
+        box_z = 0.84
 
         move_group = self.move_group
         pose_goal = geometry_msgs.msg.PoseStamped()
         pose_goal.header.frame_id = "map"
         pose_goal.pose.position.x = box_x - 0.2
         pose_goal.pose.position.y = box_y
-        pose_goal.pose.position.z = box_z - 0.4
+        pose_goal.pose.position.z = box_z + 0.2
 
         q = quaternion_from_euler(1.57, 0, 0)
         pose_goal.pose.orientation.x = q[0]
@@ -183,13 +191,87 @@ class MoveGroupPythonInterfaceTutorial(object):
         # current_pose = self.move_group.get_current_pose().pose
         # return all_close(pose_goal, current_pose, 0.01)
 
+    def go_to_pick_pos(self):
+        box_x = 4
+        box_y = -2.7 + 0.035
+        box_z = 0.84
+
+        move_group = self.move_group
+        pose_goal = geometry_msgs.msg.PoseStamped()
+        pose_goal.header.frame_id = "map"
+        pose_goal.pose.position.x = box_x - 0.2
+        pose_goal.pose.position.y = box_y
+        pose_goal.pose.position.z = box_z + 0.05
+
+        q = quaternion_from_euler(1.57, 0, 0)
+        pose_goal.pose.orientation.x = q[0]
+        pose_goal.pose.orientation.y = q[1]
+        pose_goal.pose.orientation.z = q[2]
+        pose_goal.pose.orientation.w = q[3]
+
+        move_group.set_pose_target(pose_goal)
+
+        move_group.go(wait=True)
+        # Calling `stop()` ensures that there is no residual movement
+        move_group.stop()
+        # It is always good to clear your targets after planning with poses.
+        # Note: there is no equivalent function for clear_joint_value_targets()
+        move_group.clear_pose_targets()
+
+    def close_gripper(self):
+        assert self is not None
+        rospy.wait_for_service('/parallel_gripper_left_controller/grasp')
+        try:
+            grasp = rospy.ServiceProxy('/parallel_gripper_left_controller/grasp', Empty)
+            resp1 = grasp()
+            return resp1
+        except rospy.ServiceException, e:
+            print "Service call failed: %s" % e
+
+    def open_gripper(self):
+        assert self is not None
+        rospy.wait_for_service('/parallel_gripper_left_controller/release')
+        try:
+            release = rospy.ServiceProxy('/parallel_gripper_left_controller/release', Empty)
+            resp1 = release()
+            return resp1
+        except rospy.ServiceException, e:
+            print "Service call failed: %s" % e
+
+    def go_to_base_position(self):
+        assert self is not None
+
+        client = actionlib.SimpleActionClient('move_base', MoveBaseAction)
+        client.wait_for_server()
+
+        goal = MoveBaseGoal()
+        goal.target_pose.header.frame_id = "map"
+        goal.target_pose.header.stamp = rospy.Time.now()
+        goal.target_pose.pose.position.x = 3.2
+        goal.target_pose.pose.position.y = -3.0153
+        goal.target_pose.pose.orientation.x = 0.0
+        goal.target_pose.pose.orientation.y = 0.0
+        goal.target_pose.pose.orientation.z = 0.0
+        goal.target_pose.pose.orientation.w = 1
+
+        client.send_goal(goal)
+        client.wait_for_result()
+
 
 def main():
     try:
         tutorial = MoveGroupPythonInterfaceTutorial()
         tutorial.add_box()
         tutorial.add_table()
-        # tutorial.go_to_pose_goal()
+
+        tutorial.go_to_base_position()
+        tutorial.go_to_prepick_pos()
+        tutorial.go_to_pick_pos()
+        tutorial.close_gripper()
+
+        tutorial.go_to_prepick_pos()
+        tutorial.open_gripper()
+
     except rospy.ROSInterruptException:
         return
     except KeyboardInterrupt:
