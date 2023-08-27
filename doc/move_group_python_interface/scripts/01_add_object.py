@@ -88,9 +88,9 @@ class MoveGroupPythonInterfaceTutorial(object):
         box_pose = geometry_msgs.msg.PoseStamped()
         box_pose.header.frame_id = "map"
 
-        box_pose.pose.position.x = 4.0
-        box_pose.pose.position.y = -2.7
-        box_pose.pose.position.z = 0.8393
+        box_pose.pose.position.x = box_x
+        box_pose.pose.position.y = box_y
+        box_pose.pose.position.z = box_z
 
         box_pose.pose.orientation.x = 0
         box_pose.pose.orientation.y = 0
@@ -159,15 +159,11 @@ class MoveGroupPythonInterfaceTutorial(object):
         return False
 
     def go_to_prepick_pos(self):
-        box_x = 4
-        box_y = -2.7 + 0.035
-        box_z = 0.84
-
         move_group = self.move_group
         pose_goal = geometry_msgs.msg.PoseStamped()
         pose_goal.header.frame_id = "map"
         pose_goal.pose.position.x = box_x - 0.2
-        pose_goal.pose.position.y = box_y
+        pose_goal.pose.position.y = box_y + 0.035
         pose_goal.pose.position.z = box_z + 0.2
 
         q = quaternion_from_euler(1.57, 0, 0)
@@ -192,15 +188,11 @@ class MoveGroupPythonInterfaceTutorial(object):
         # return all_close(pose_goal, current_pose, 0.01)
 
     def go_to_pick_pos(self):
-        box_x = 4
-        box_y = -2.7 + 0.035
-        box_z = 0.84
-
         move_group = self.move_group
         pose_goal = geometry_msgs.msg.PoseStamped()
         pose_goal.header.frame_id = "map"
         pose_goal.pose.position.x = box_x - 0.2
-        pose_goal.pose.position.y = box_y
+        pose_goal.pose.position.y = box_y + 0.035
         pose_goal.pose.position.z = box_z + 0.05
 
         q = quaternion_from_euler(1.57, 0, 0)
@@ -256,6 +248,11 @@ class MoveGroupPythonInterfaceTutorial(object):
 
         client.send_goal(goal)
         client.wait_for_result()
+
+
+box_x = 4
+box_y = -2.8
+box_z = 0.84
 
 
 def main():
