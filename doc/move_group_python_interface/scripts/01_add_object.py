@@ -252,7 +252,7 @@ class MoveGroupPythonInterfaceTutorial(object):
 
 box_x = 4
 box_y = -2.8
-box_z = 0.84
+box_z = 0.825
 
 
 def main():
